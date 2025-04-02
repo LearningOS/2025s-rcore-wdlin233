@@ -1,5 +1,7 @@
 //! Types related to task management
 
+use alloc::collections::btree_map::BTreeMap;
+
 use super::TaskContext;
 
 /// The task control block (TCB) of a task.
@@ -22,4 +24,24 @@ pub enum TaskStatus {
     Running,
     /// exited
     Exited,
+}
+
+#[derive(Clone)]
+pub struct SyscallTrace {
+    pub syscall_count: BTreeMap<usize, usize>,
+}
+
+
+impl SyscallTrace {
+    pub fn new() -> Self {
+        Self {
+            syscall_count: BTreeMap::new(),
+        }
+    }
+}
+
+impl Default for SyscallTrace {
+    fn default() -> Self {
+         Self::new()
+    }
 }

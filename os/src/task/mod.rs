@@ -17,9 +17,9 @@ mod task;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
-use alloc::collections::btree_map::BTreeMap;
 use lazy_static::*;
 use switch::__switch;
+use task::SyscallTrace;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use context::TaskContext;
@@ -47,7 +47,7 @@ pub struct TaskManagerInner {
     /// id of current `Running` task
     current_task: usize,
     /// syscall count
-    syscall_count: BTreeMap<usize, usize>,
+    syscall_count: [SyscallTrace; MAX_APP_NUM],
 }
 
 lazy_static! {
@@ -62,13 +62,14 @@ lazy_static! {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
             task.task_status = TaskStatus::Ready;
         }
+        let syscall_count = Default::default();
         TaskManager {
             num_app,
             inner: unsafe {
                 UPSafeCell::new(TaskManagerInner {
                     tasks,
                     current_task: 0,
-                    syscall_count: BTreeMap::new(),
+                    syscall_count,
                 })
             },
         }
@@ -142,12 +143,17 @@ impl TaskManager {
 
     fn update_syscall_times(&self, syscall_id: usize) {
         let mut inner = self.inner.exclusive_access();
-        inner.syscall_count.entry(syscall_id).and_modify(|count| *count += 1 ).or_insert(1);
+        let current_task_no = inner.current_task;
+        let syscall_times = &mut inner
+            .syscall_count[current_task_no]
+            .syscall_count;
+        syscall_times.entry(syscall_id).and_modify(|count| *count += 1 ).or_insert(1);
     }
 
     fn get_syscall_times(&self, syscall_id: usize) -> usize {
         let inner = self.inner.exclusive_access();
-        match inner.syscall_count.get(&syscall_id) {
+        let current_task_no = inner.current_task;
+        match inner.syscall_count[current_task_no].syscall_count.get(&syscall_id) {
             Some(&count) => return count,
             None => return 0,
         }
