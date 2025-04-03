@@ -176,6 +176,20 @@ impl TaskManager {
             None => return 0,
         }
     }
+
+    fn mmap(&self, addr: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task_no = inner.current_task;
+        let task = &mut inner.tasks[current_task_no];
+        task.memory_set.mmap(addr, len, port)
+    }
+
+    fn munmap(&self, addr: usize, len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task_no = inner.current_task;
+        let task = &mut inner.tasks[current_task_no];
+        task.memory_set.munmap(addr, len)
+    }
 }
 
 /// Run the first task in task list.
@@ -234,4 +248,14 @@ pub fn update_syscall_times(syscall_id: usize) {
 /// Get syscall count
 pub fn get_syscall_times(syscall_id: usize) -> usize {
     TASK_MANAGER.get_syscall_times(syscall_id)
+}
+
+/// Memory map a file into the current task's address space
+pub fn mmap(addr: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.mmap(addr, len, port)
+}
+
+/// Unmap a file from the current task's address space
+pub fn munmap(addr: usize, len: usize) -> isize {
+    TASK_MANAGER.munmap(addr, len)
 }

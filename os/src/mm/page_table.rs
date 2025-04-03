@@ -70,6 +70,10 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    /// The page pointered by page table entry is user available?
+    pub fn user_available(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
 }
 
 /// page table structure
@@ -178,4 +182,91 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// Create a buffer for reading a value from user space
+pub fn trace_read(token: usize, src: usize) -> Option<u8> {
+    trace!("trace_read: src = {:?}", src);
+    let page_table = PageTable::from_token(token);
+    let vpn = VirtAddr::from(src).floor();
+    trace!("trace_read: vpn = {:?}", vpn);
+    // it should be aligned
+    let Some(pte) = page_table.translate(vpn) else {
+        trace!("trace_read: page table entry not found");
+        return None;
+    };
+
+    if !pte.is_valid() {
+        return None;
+    }
+
+    // if we don't check the user available state then 
+    // will be paniced at src/mm/heap_allocator.rs:12 Heap allocation error
+    // because the memory allocaition is not rational
+    if !pte.user_available() {
+        return None;
+    }
+
+    if !pte.readable() {
+        return None;
+    }
+
+    let mut dst = core::mem::MaybeUninit::<u8>::uninit();
+    let dst_ptr = dst.as_mut_ptr();
+    let dst_buf_ptr: *mut u8 = unsafe { core::mem::transmute(dst_ptr) };
+    let len = core::mem::size_of::<u8>();
+    trace!("trace_read: dst_buf_ptr = {:?}", dst_buf_ptr);
+
+    let src_frame_buffers = translated_byte_buffer(token, src as *const u8, len);
+    trace!("trace_read: src_frame_buffers = {:?}", src_frame_buffers);
+
+    let mut offset = 0;
+    for src_frame in src_frame_buffers {
+        unsafe { core::slice::from_raw_parts_mut(dst_buf_ptr.add(offset), src_frame.len()) }
+            .copy_from_slice(src_frame);
+        offset += src_frame.len();
+    }
+
+    Some(unsafe {
+        dst.assume_init()
+    })
+}
+
+/// Create a buffer for writing a value
+pub fn trace_write(token: usize, dst: usize, data: usize) -> bool {
+    trace!("trace_write: dst = {:?}", dst);
+    let page_table = PageTable::from_token(token);
+    let vpn = VirtAddr::from(dst).floor();
+    trace!("trace_write: vpn = {:?}", vpn);
+    let Some(pte) = page_table.translate(vpn) else {
+        return false;
+    };
+
+    if !pte.is_valid() {
+        return false;
+    }
+
+    if !pte.user_available() {
+        return false;
+    }
+
+    if !pte.writable() {
+        return false;
+    }
+
+    let src_buf_ptr: *const u8 = unsafe { core::mem::transmute(&data) };
+    let dst_buf_ptr: *mut u8 = unsafe { core::mem::transmute(dst) };
+    let len = core::mem::size_of::<u8>();
+
+    let dst_frame_buffers = translated_byte_buffer(token, dst_buf_ptr, len);
+
+    let mut offset = 0;
+    for dst_frame in dst_frame_buffers {
+        dst_frame.copy_from_slice(
+            unsafe { core::slice::from_raw_parts(src_buf_ptr.add(offset), dst_frame.len()) },
+        );
+        offset += dst_frame.len();
+    }
+
+    true
 }

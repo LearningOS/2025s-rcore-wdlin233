@@ -42,7 +42,6 @@ pub mod syscall;
 pub mod task;
 pub mod timer;
 pub mod trap;
-pub mod util;
 
 core::arch::global_asm!(include_str!("entry.asm"));
 core::arch::global_asm!(include_str!("link_app.S"));
