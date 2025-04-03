@@ -447,3 +447,76 @@ pub fn remap_test() {
         .executable(),);
     println!("remap_test passed!");
 }
+
+impl MapPermission {
+    /// Convert from port to MapPermission
+    pub fn from_port(port: usize) -> Self {
+        let bits = (port as u8) << 1;
+        MapPermission::from_bits(bits).unwrap() 
+    }
+
+    /// Add user permission for MapPermission
+    pub fn with_user(self) -> Self {
+        self | MapPermission::U
+    }
+}
+
+impl MemorySet {
+    /// Check if all pages in the range are mapped.
+    fn all_valid(&self, start: VirtAddr, end: VirtAddr) -> bool {
+        let start_vpn = start.floor();
+        let end_vpn = end.ceil();
+        VPNRange::new(start_vpn, end_vpn)
+            .into_iter()
+            .all(|vpn| 
+                self.translate(vpn).map_or(false, |pte| pte.is_valid())
+            )
+    }
+
+    /// Check if all pages in the range are unmapped.
+    fn all_invalid(&self, start: VirtAddr, end: VirtAddr) -> bool {
+        let start_vpn = start.floor();
+        let end_vpn = end.ceil();
+        VPNRange::new(start_vpn, end_vpn)
+            .into_iter()
+            .all(|vpn| 
+                self.translate(vpn).map_or(true, |pte| !pte.is_valid())
+            )
+    }
+
+    /// Create a new memory area with the given start address, length, and protection flags.
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let permission = MapPermission::from_port(port).with_user();
+
+        debug!("mmap: start_va: {:#x}, end_va: {:#x}, permission: {:?}", start, start + len, permission);
+        if !self.all_invalid(start_va, end_va) {
+            debug!("mmap: invalid range");
+            return -1;
+        }
+        self.insert_framed_area(start_va, end_va, permission);
+        debug!("mmap succeed");
+        assert!(self.all_valid(start_va, end_va));
+        0
+    }
+
+    /// Unmap a memory area with the given start address and length.
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        debug!("munmap: start_va: {:#x}, end_va: {:#x}", start, start + len);
+        if !self.all_valid(start_va, end_va) {
+            return -1;
+        }
+        let area = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.get_start() == start_va.floor())
+            .unwrap();
+        area.unmap(&mut self.page_table);
+        //self.areas.retain(|area| area.vpn_range.get_start() != start_va.floor());
+        assert!(self.all_invalid(start_va, end_va));
+        0
+    }
+}

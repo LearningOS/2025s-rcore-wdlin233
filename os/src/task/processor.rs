@@ -109,3 +109,25 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
 }
+
+/// Create a MapArea for the current task
+pub fn mmap(addr: usize, len: usize, port: usize) -> isize {
+    PROCESSOR
+        .exclusive_access()
+        .current()
+        .unwrap()
+        .inner_exclusive_access()
+        .memory_set
+        .mmap(addr, len, port)
+}
+
+/// Unmap the MapArea for the current task
+pub fn munmap(addr: usize, len: usize) -> isize {
+    PROCESSOR
+        .exclusive_access()
+        .current()
+        .unwrap()
+        .inner_exclusive_access()
+        .memory_set
+        .munmap(addr, len)
+}
