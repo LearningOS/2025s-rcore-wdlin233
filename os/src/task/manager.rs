@@ -25,6 +25,25 @@ impl TaskManager {
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
     }
+
+    /// Take a process out of the ready queue by Stride Algorithm
+    pub fn stride_fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
+        if self.ready_queue.is_empty() {
+            return None;
+        }
+        if let Some((index, _)) = self.ready_queue
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, task)| task.inner_exclusive_access().stride)
+        {
+            return self.ready_queue.swap_remove_back(index).map(|task| {
+                let prio = task.inner_exclusive_access().priority;
+                task.inner_exclusive_access().stride.step(prio);
+                task
+            })
+        } 
+        None
+    }
 }
 
 lazy_static! {
@@ -41,6 +60,6 @@ pub fn add_task(task: Arc<TaskControlBlock>) {
 
 /// Take a process out of the ready queue
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
-    //trace!("kernel: TaskManager::fetch_task");
-    TASK_MANAGER.exclusive_access().fetch()
+    trace!("kernel: TaskManager::fetch_task");
+    TASK_MANAGER.exclusive_access().stride_fetch()
 }

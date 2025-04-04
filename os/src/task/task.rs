@@ -1,4 +1,5 @@
 //! Types related to task management & Functions for completely changing TCB
+use super::stride::Stride;
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
@@ -71,6 +72,9 @@ pub struct TaskControlBlockInner {
 
     /// Priority of the process
     pub priority: usize,
+
+    /// stride of the process
+    pub stride: Stride,
 }
 
 impl TaskControlBlockInner {
@@ -122,6 +126,7 @@ impl TaskControlBlock {
                     heap_bottom: user_sp,
                     program_brk: user_sp,
                     priority: 16,
+                    stride: Stride::default(),
                 })
             },
         };
@@ -196,6 +201,7 @@ impl TaskControlBlock {
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
                     priority: 16,
+                    stride: Stride::default(),
                 })
             },
         });
