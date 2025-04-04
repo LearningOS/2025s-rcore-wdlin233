@@ -250,3 +250,15 @@ pub enum TaskStatus {
     /// exited
     Zombie,
 }
+
+impl TaskControlBlock {
+    /// Create a new child process directly from the parent process
+    pub fn spwan(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let child = Arc::new(Self::new(elf_data));
+        
+        child.inner_exclusive_access().parent = Some(Arc::downgrade(self));
+        self.inner_exclusive_access().children.push(Arc::clone(&child));
+        
+        child
+    } 
+}
