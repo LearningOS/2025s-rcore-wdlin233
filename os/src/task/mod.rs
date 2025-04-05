@@ -21,6 +21,7 @@ mod switch;
 #[allow(clippy::module_inception)]
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
+mod stride;
 
 use crate::fs::{open_file, OpenFlags};
 use alloc::sync::Arc;
@@ -36,6 +37,7 @@ pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor,
 };
+pub use processor::{mmap, munmap};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.

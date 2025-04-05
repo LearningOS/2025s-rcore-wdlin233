@@ -1,4 +1,5 @@
 //! Types related to task management & Functions for completely changing TCB
+use super::stride::Stride;
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::config::TRAP_CONTEXT_BASE;
@@ -7,8 +8,8 @@ use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
-use alloc::vec;
 use alloc::vec::Vec;
+use alloc::vec;
 use core::cell::RefMut;
 
 /// Task control block structure
@@ -71,12 +72,20 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Priority of the process
+    pub priority: usize,
+
+    /// stride of the process
+    pub stride: Stride,
 }
 
 impl TaskControlBlockInner {
+    /// get the trap context
     pub fn get_trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.get_mut()
     }
+    /// get the user token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
     }
@@ -135,6 +144,8 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    priority: 16,
+                    stride: Stride::default(),
                 })
             },
         };
@@ -216,6 +227,8 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    priority: 16,
+                    stride: Stride::default(),
                 })
             },
         });
@@ -274,4 +287,16 @@ pub enum TaskStatus {
     Running,
     /// exited
     Zombie,
+}
+
+impl TaskControlBlock {
+    /// Create a new child process directly from the parent process
+    pub fn spwan(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let child = Arc::new(Self::new(elf_data));
+        
+        child.inner_exclusive_access().parent = Some(Arc::downgrade(self));
+        self.inner_exclusive_access().children.push(Arc::clone(&child));
+        
+        child
+    } 
 }
