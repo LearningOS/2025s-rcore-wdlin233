@@ -1,7 +1,7 @@
 //! PhysAddr, VirtAddr, PhysPageNum, VirtPageNum, raw address
 
-use super::PageTableEntry;
-use crate::config::{PAGE_SIZE, PAGE_SIZE_BITS};
+use super::{translated_byte_buffer, PageTableEntry};
+use crate::{config::{PAGE_SIZE, PAGE_SIZE_BITS}, task::current_user_token};
 use core::fmt::{self, Debug, Formatter};
 
 const PA_WIDTH_SV39: usize = 56;
@@ -284,3 +284,20 @@ where
     }
 }
 pub type VPNRange = SimpleRange<VirtPageNum>;
+
+/// write a value(`$T`) to the virtual address(dst)
+pub fn copy_to_virt<T>(src: &T, dst: *mut T) {
+    let src_buf_ptr: *const u8 = unsafe { core::mem::transmute(src) };
+    let dst_buf_ptr: *mut u8 = unsafe { core::mem::transmute(dst) };
+    let len = core::mem::size_of::<T>();
+
+    let dst_frame_buffers = translated_byte_buffer(current_user_token(), dst_buf_ptr, len);
+
+    let mut offset = 0;
+    for dst_frame in dst_frame_buffers {
+        dst_frame.copy_from_slice(
+            unsafe { core::slice::from_raw_parts(src_buf_ptr.add(offset), dst_frame.len()) },
+        );
+        offset += dst_frame.len();
+    }
+}
