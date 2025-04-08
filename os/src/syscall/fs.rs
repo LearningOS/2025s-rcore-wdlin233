@@ -99,7 +99,7 @@ pub fn sys_fstat(fd: usize, st: *mut Stat) -> isize {
 
 /// YOUR JOB: Implement linkat.
 pub fn sys_linkat(old_name: *const u8, new_name: *const u8) -> isize {
-    debug!(
+    trace!(
         "kernel:pid[{}] sys_linkat(old_name: 0x{:x?}, new_name: 0x{:x?})",
         current_task().unwrap().pid.0, old_name, new_name
     );
@@ -111,7 +111,7 @@ pub fn sys_linkat(old_name: *const u8, new_name: *const u8) -> isize {
 
 /// YOUR JOB: Implement unlinkat.
 pub fn sys_unlinkat(name: *const u8) -> isize {
-    debug!(
+    trace!(
         "kernel:pid[{}] sys_unlinkat(name: 0x{:x?})",
         current_task().unwrap().pid.0, name
     );

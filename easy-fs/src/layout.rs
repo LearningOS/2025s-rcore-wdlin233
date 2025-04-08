@@ -1,7 +1,6 @@
 use super::{get_block_cache, BlockDevice, BLOCK_SZ};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use log::debug;
 use core::fmt::{Debug, Formatter, Result};
 
 /// Magic number for sanity check
