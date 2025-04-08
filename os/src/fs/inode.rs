@@ -175,3 +175,30 @@ impl File for OSInode {
         })
     }
 }
+
+/// Unlink a file
+pub fn unlink_at(path: &str) -> isize {
+    let Some(file) = ROOT_INODE.remove(path) else {
+        return -1;
+    };
+
+    if file.links_count() == 0 {
+        file.dealloc_resource();
+    }
+    0
+}
+
+/// Link a file
+pub fn link_at(old_name: &str, new_name: &str) -> isize {
+    let Some(file) = ROOT_INODE.find(old_name) else {
+        return -1;
+    };
+    if file.is_dir() {
+        return -1;
+    }
+    let inode = file.inode_id();
+    if ROOT_INODE.add_dirent(new_name, inode).is_none() {
+        return -1;
+    }
+    0
+}

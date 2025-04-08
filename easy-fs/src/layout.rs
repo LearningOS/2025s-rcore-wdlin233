@@ -438,14 +438,18 @@ impl DiskInode {
     pub fn links_count(&self) -> u32 {
         self.links_count
     }
-    pub fn inc_links_count(&mut self) {
+    pub fn inc_links(&mut self) {
         self.links_count += 1;
     }
-    pub fn dec_links_count(&mut self) {
+    pub fn dec_links(&mut self) {
         assert!(self.links_count > 0);
         self.links_count -= 1;
     }
-    pub fn set_links_count(&mut self, count: u32) {
-        self.links_count = count;
+    pub fn decrease_size(
+        &mut self,
+        new_size: u32,
+    ) {
+        assert!(new_size <= self.size);
+        self.size = new_size;
     }
 }
