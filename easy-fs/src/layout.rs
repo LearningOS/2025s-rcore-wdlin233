@@ -1,6 +1,7 @@
 use super::{get_block_cache, BlockDevice, BLOCK_SZ};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use log::debug;
 use core::fmt::{Debug, Formatter, Result};
 
 /// Magic number for sanity check
@@ -447,9 +448,8 @@ impl DiskInode {
     }
     pub fn decrease_size(
         &mut self,
-        new_size: u32,
+        diff_size: u32,
     ) {
-        assert!(new_size <= self.size);
-        self.size = new_size;
+        self.size -= diff_size;
     }
 }
