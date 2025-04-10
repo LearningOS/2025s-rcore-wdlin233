@@ -40,7 +40,7 @@ pub fn sys_mutex_create(blocking: bool) -> isize {
     } else {
         Some(Arc::new(MutexBlocking::new()))
     };
-    init_available_resource(0, 1);
+    // init_available_resource(0, 1);
     let mut process_inner = process.inner_exclusive_access();
     if let Some(id) = process_inner
         .mutex_list
@@ -49,9 +49,11 @@ pub fn sys_mutex_create(blocking: bool) -> isize {
         .find(|(_, item)| item.is_none())
         .map(|(id, _)| id)
     {
+        init_available_resource(id, 1);
         process_inner.mutex_list[id] = mutex;
         id as isize
     } else {
+        init_available_resource(process_inner.mutex_list.len(), 1);
         process_inner.mutex_list.push(mutex);
         process_inner.mutex_list.len() as isize - 1
     }
@@ -81,12 +83,12 @@ pub fn sys_mutex_lock(mutex_id: usize) -> isize {
     let mutex = Arc::clone(process_inner.mutex_list[mutex_id].as_ref().unwrap());
     drop(process_inner);
     drop(process);
-    match request(tid, 0, 1) {
+    match request(tid, mutex_id, 1) {
         RequestResult::Error => return -0xDEAD,
         _ => {}
     }
-    alloc(tid, 0, 1);
     mutex.lock();
+    alloc(tid, mutex_id, 1);
     0
 }
 /// mutex unlock syscall
@@ -114,13 +116,13 @@ pub fn sys_mutex_unlock(mutex_id: usize) -> isize {
     let mutex = Arc::clone(process_inner.mutex_list[mutex_id].as_ref().unwrap());
     drop(process_inner);
     drop(process);
-    dealloc(tid, 0, 1);
     mutex.unlock();
+    dealloc(tid, mutex_id, 1);
     0
 }
 /// semaphore create syscall
 pub fn sys_semaphore_create(res_count: usize) -> isize {
-    debug!(
+    trace!(
         "kernel:pid[{}] tid[{}] sys_semaphore_create",
         current_task().unwrap().process.upgrade().unwrap().getpid(),
         current_task()
@@ -140,23 +142,23 @@ pub fn sys_semaphore_create(res_count: usize) -> isize {
         .find(|(_, item)| item.is_none())
         .map(|(id, _)| id)
     {
-        info!("init semaphore id {}", id);
-        init_available_resource(id, res_count);
+        //init_available_resource(id, res_count);
         process_inner.semaphore_list[id] = Some(Arc::new(Semaphore::new(res_count)));
         id
     } else {
-        info!("create semaphore id {}", process_inner.semaphore_list.len());
         process_inner
             .semaphore_list
             .push(Some(Arc::new(Semaphore::new(res_count))));
-        init_available_resource(process_inner.semaphore_list.len() - 1, res_count);
+        //info!("kernel: create semaphore {}", process_inner.semaphore_list.len());
+        //init_available_resource(process_inner.semaphore_list.len(), res_count);
         process_inner.semaphore_list.len() - 1
     };
+    init_available_resource(id, res_count);
     id as isize
 }
 /// semaphore up syscall
 pub fn sys_semaphore_up(sem_id: usize) -> isize {
-    debug!(
+    trace!(
         "kernel:pid[{}] tid[{}] sys_semaphore_up",
         current_task().unwrap().process.upgrade().unwrap().getpid(),
         current_task()
@@ -174,17 +176,18 @@ pub fn sys_semaphore_up(sem_id: usize) -> isize {
         .as_ref()
         .unwrap()
         .tid;
+    dealloc(tid, sem_id, 1);
     let process = current_process();
     let process_inner = process.inner_exclusive_access();
     let sem = Arc::clone(process_inner.semaphore_list[sem_id].as_ref().unwrap());
     drop(process_inner);
-    dealloc(tid, sem_id, 1);
     sem.up();
+    // dealloc() is ok
     0
 }
 /// semaphore down syscall
 pub fn sys_semaphore_down(sem_id: usize) -> isize {
-    debug!(
+    trace!(
         "kernel:pid[{}] tid[{}] sys_semaphore_down",
         current_task().unwrap().process.upgrade().unwrap().getpid(),
         current_task()
@@ -210,8 +213,10 @@ pub fn sys_semaphore_down(sem_id: usize) -> isize {
         RequestResult::Error => return -0xDEAD,
         _ => {}
     }
-    alloc(tid, sem_id, 1);
+    trace!("sem.down() with sem_id: {}", sem_id);
+    // alloc() cant be here
     sem.down();
+    alloc(tid, sem_id, 1);
     0
 }
 /// condvar create syscall
@@ -291,7 +296,7 @@ pub fn sys_condvar_wait(condvar_id: usize, mutex_id: usize) -> isize {
 ///
 /// YOUR JOB: Implement deadlock detection, but might not all in this syscall
 pub fn sys_enable_deadlock_detect(enabled: usize) -> isize {
-    debug!("kernel: sys_enable_deadlock_detect(enbaled={})", enabled);
+    trace!("kernel: sys_enable_deadlock_detect(enbaled={})", enabled);
     match enabled {
         0 => disable_banker_algo(),
         1 => enable_banker_algo(),

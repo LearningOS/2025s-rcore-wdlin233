@@ -1,7 +1,7 @@
 use alloc::collections::btree_map::BTreeMap;
 use lazy_static::*;
 use crate::task::current_process;
-use crate::log::debug;
+use crate::log::*;
 
 use super::UPSafeCell;
 
@@ -31,6 +31,7 @@ lazy_static! {
 }
 
 /// Request result
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RequestResult {
     /// Request success
     Success,
@@ -44,34 +45,35 @@ impl BankerAlgorithm {
     /// Add a resource to the available map
     pub fn init_available_resource(&mut self, resource: ResourceIdentifier, number: NumberOfResources) {
         *self.available.entry(resource).or_default() += number;
-        debug!("kernel: banker_algo init_available_resource: resource[{}] number[{}]", resource, number);
+        trace!("kernel: banker_algo init_available_resource: resource[{}] number[{}]", resource, number);
     }
 
     fn init_task_resource(&mut self, tid: TaskIdentifier, resource: ResourceIdentifier, need: NumberOfResources) {
         self.task_state.entry(tid).or_default()
             .entry(resource).or_default()
-            .need = need;
+            .need += need;
     }
 
     /// Allocate resources to a task
     pub fn alloc(&mut self, tid: TaskIdentifier, request: NumberOfResources, resource: ResourceIdentifier) {
-        debug!("kernel: banker_algo alloc: tid[{}] resource[{}] request[{}]", tid, resource, request);
+        trace!("kernel: banker_algo alloc: tid[{}] resource[{}] request[{}]", tid, resource, request);
         let available = self.available.get_mut(&resource).unwrap();
         let task = self.task_state
             .get_mut(&tid)
             .unwrap()
             .get_mut(&resource)
             .unwrap();
+        trace!("kernel: banker_algo alloc: available[{}] allocation[{}] need[{}] with resource[{}]", available, task.allocation, task.need, resource);
         assert!(request <= *available, "kernel: banker_algo alloc: request[{}] > available[{}]", request, available);
         *available -= request;
         task.allocation += request;
         task.need -= request;
-        debug!("kernel: banker_algo alloc: available[{}] allocation[{}] need[{}] with resource[{}]", available, task.allocation, task.need, resource);
+        trace!("kernel: banker_algo alloc: available[{}] allocation[{}] need[{}] with resource[{}]", available, task.allocation, task.need, resource);
     }
 
     /// Deallocate resources from a task
     pub fn dealloc(&mut self, tid: TaskIdentifier, request: NumberOfResources, resource: ResourceIdentifier) {
-        debug!("kernel: banker_algo dealloc: tid[{}] resource[{}] request[{}]", tid, resource, request);
+        trace!("kernel: banker_algo dealloc: tid[{}] resource[{}] request[{}]", tid, resource, request);
         let available = self.available.get_mut(&resource).unwrap();
         let task = self.task_state
             .get_mut(&tid)
@@ -80,7 +82,7 @@ impl BankerAlgorithm {
             .unwrap();
         *available += request;
         task.allocation -= request;
-        debug!("kernel: banker_algo dealloc: available[{}] allocation[{}] need[{}] with resource[{}]", available, task.allocation, task.need, resource);
+        trace!("kernel: banker_algo dealloc: available[{}] allocation[{}] need[{}] with resource[{}]", available, task.allocation, task.need, resource);
     }
 
     /// Try to request resources to detect if the system is in a safe state
@@ -89,6 +91,7 @@ impl BankerAlgorithm {
         if self.security_check() {
            return RequestResult::Success;
         }
+        trace!("kernel: banker_algo request: security_check failed");
         return RequestResult::Error;
     }
 
@@ -168,7 +171,9 @@ pub fn dealloc(tid: TaskIdentifier, resource: ResourceIdentifier, request: Numbe
 pub fn request(tid: TaskIdentifier, resource: ResourceIdentifier, need: NumberOfResources) -> RequestResult {
     let pid = current_process().getpid();
     if let Some(banker_algo) = BANKER_ALGO.exclusive_access().get_mut(&pid) {
-        banker_algo.request(tid, resource, need)
+        let res = banker_algo.request(tid, resource, need);
+        trace!("kernel: banker_algo request: pid[{}] tid[{}] resource[{}] need[{}] result[{:?}]", pid, tid, resource, need, res);
+        res
     } else {
         RequestResult::Null
     }
