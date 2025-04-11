@@ -12,3 +12,5 @@ pub struct BankerAlgorithm {
     task_state: BTreeMap<TaskIdentifier, BTreeMap<ResourceIdentifier, TaskResourceState>>,
 }
 ```
+
+`sys_semaphore_down` 中的 `sem.down()` 必须在 `alloc(tid, sem_id, 1)` 之前，可能是因为 `sem.down()` 会将进程挂起。若 `alloc` 在此之前，可能导致资源并未被实际获取，由此其他进程因为错误的状态而无法获取资源。这个顺序保持着资源分配记录与实际获取资源状态相一致。
